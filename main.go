@@ -74,10 +74,11 @@ func main() {
 	// Initialize the router
 	r := mux.NewRouter()
 
+	// Apply middleware globally
+	r.Use(loggingMiddleware)
+	r.Use(errorHandlingMiddleware)
+
 	// Define the endpoints
-	//r.HandleFunc("/books/", getBooks).Methods("GET")
-	//r.HandleFunc("/books/{id}", getBook).Methods("GET")
-	//r.HandleFunc("/books", createBook).Methods("POST")
 	r.HandleFunc("/login", login).Methods("POST")
 	r.Handle("/books", authenticate(http.HandlerFunc(getBooks))).Methods("GET")
 	r.Handle("/books/{id}", authenticate(http.HandlerFunc(getBook))).Methods("GET")
@@ -163,6 +164,34 @@ func authenticate(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// logging
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Log the method and the requested URL
+		log.Printf("Started %s %s", r.Method, r.URL.Path)
+
+		// Call the next handler in the chain
+		next.ServeHTTP(w, r)
+
+		// Log how long it took
+		log.Printf("Completed in %v", time.Since(start))
+	})
+}
+func errorHandlingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				// Log the error and send a user-friendly message
+				log.Printf("Error occurred: %v", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+		}()
 		next.ServeHTTP(w, r)
 	})
 }
